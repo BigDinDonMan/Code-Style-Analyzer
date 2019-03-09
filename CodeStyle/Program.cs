@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static CodeStyle.Tree<string>;
+using System.IO;
+using Newtonsoft.Json;
 
 namespace CodeStyle {
     class Program {
@@ -19,22 +21,22 @@ namespace CodeStyle {
             t.root.AddChild(new TreeNode<string>("tsooo"));
             t.root.AddChild(new TreeNode<string>("xDD"));
             Tree<string>.Print(t.root);*/
-            string s1, s2;
-            s1 = "kit";
-            s2 = "kot";
-            int distance = CodeAnalyzer.GetInstance().LevenshteinDistance(s1, s2);
-            Console.WriteLine("distance: {0}", distance.ToString());
-            Console.ReadKey();
-            
-            Tree<string> strings = new Tree<string>(new TreeNode<string>("coś here"));
-            strings.root.AddChild(new TreeNode<string>("xD"));
-            strings.root.AddChild(new TreeNode<string>("x1"));
-            strings.root.AddChild(new TreeNode<string>("x2"));
-            strings.root.GetChild(0).AddChild(new TreeNode<string>("s"));
-            Print(strings.root);
-            Console.WriteLine("{0}", Find(strings.root, "xD").Value.ToString());
-            //Console.WriteLine(Tree<string>.Ge)
-            Console.ReadKey();
+            /* string s1, s2;
+             s1 = "kit";
+             s2 = "kot";
+             int distance = CodeAnalyzer.GetInstance().LevenshteinDistance(s1, s2);
+             Console.WriteLine("distance: {0}", distance.ToString());
+             Console.ReadKey();
+
+             Tree<string> strings = new Tree<string>(new TreeNode<string>("coś here"));
+             strings.root.AddChild(new TreeNode<string>("xD"));
+             strings.root.AddChild(new TreeNode<string>("x1"));
+             strings.root.AddChild(new TreeNode<string>("x2"));
+             strings.root.GetChild(0).AddChild(new TreeNode<string>("s"));
+             Print(strings.root);
+             Console.WriteLine("{0}", Find(strings.root, "xD").Value.ToString());
+             //Console.WriteLine(Tree<string>.Ge)
+             Console.ReadKey();*/
             /*  string path = @"definetest.c";
               List<string> lines = CodeAnalyzer.GetInstance().LoadCode(path);
               var defines = CodeAnalyzer.GetInstance().GetDefines(lines);
@@ -45,13 +47,61 @@ namespace CodeStyle {
                   }
               }
               Console.ReadKey();*/
-            string path = "definetest.c";
+            /*string path = "definetest.c";
             var tree = CodeAnalyzer.GetInstance().BuildDefineTree(path);
             foreach (var t in tree) {
                 Print(t.root);
             }
             GC.Collect();
-            Console.ReadKey();
+            Console.ReadKey();*/
+            //string[] operators = new string[] {"+", "-", "++", "--", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "!", "~", "&", "|", "^", "<<", ">>", "=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "^=", "&=", "|=", "sizeof"};
+            //string[] keywords = new string[] {
+            //    "auto",
+            //    "break",
+            //    "case",
+            //    "char",
+            //    "const",
+            //    "continue",
+            //    "default",
+            //    "do",
+            //    "double",
+            //    "else",
+            //    "enum",
+            //    "extern",
+            //    "float",
+            //    "for",
+            //    "goto",
+            //    "if",
+            //    "inline",
+            //    "int",
+            //    "long",
+            //    "register",
+            //    "restrict",
+            //    "return",
+            //    "short",
+            //    "signed",
+            //    "sizeof",
+            //    "static",
+            //    "struct",
+            //    "switch",
+            //    "typedef",
+            //    "union",
+            //    "unsigned",
+            //    "void",
+            //    "volatile",
+            //    "while"
+            // };
+            //using (var fs = new FileStream("../../ProgramFiles/operators.json", FileMode.OpenOrCreate)) {
+            //    using (var writer = new StreamWriter(fs)) {
+            //        writer.Write(JsonConvert.SerializeObject(operators));
+            //    }
+            //}
+
+            //using (var fs = new FileStream("../../ProgramFiles/keywords.json", FileMode.OpenOrCreate)) {
+            //    using (var writer = new StreamWriter(fs)) {
+            //        writer.Write(JsonConvert.SerializeObject(keywords));
+            //    }
+            //}
         }
     }
 }

@@ -6,8 +6,16 @@ using System.Threading.Tasks;
 using System.IO;
 using Newtonsoft.Json;
 
+//TODO: implement function tree
+//TODO: implement C Function object
+//TODO: filter out commented out code 
+
 namespace CodeStyle {
     public class CodeAnalyzer {
+
+        public readonly string[] operators = null;
+
+        public readonly string[] keywords = null;
 
         private static CodeAnalyzer instance = null;
 
@@ -16,25 +24,26 @@ namespace CodeStyle {
             return instance;
         }
 
-        private CodeAnalyzer() {}
+        private CodeAnalyzer() {
+            operators = GetOperators();
+            keywords = GetKeywords();
+        }
 
-        /*public Dictionary<string, List<string>> GetDefines(List<string> lines, string headerPath = null) {
-            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
-
-            string[] defines = lines.FindAll(line => line.Contains("#define")).ToArray();
-
-            Dictionary<string, List<string>> defineTree = new Dictionary<string, List<string>>();
-
-            foreach (var def in defines) {
-                string[] temp = def.Split();
-                if (!defineTree.ContainsKey(temp[2])) {
-                    defineTree.Add(temp[2], new List<string>());
-                }
-                defineTree[temp[2]].Add(temp[1]);
+        protected string[] GetKeywords() {
+            string[] words = null;
+            using (var reader = new StreamReader("../../ProgramFiles/keywords.json")) {
+                words = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
-
-            return defineTree;
-        }*/
+            return words;
+        }
+        
+        protected string[] GetOperators() {
+            string[] operators = null;
+            using (var reader = new StreamReader("../../ProgramFiles/operators.json")) {
+                operators = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
+            }
+            return operators;
+        }
 
         public List<string> LoadCode(string path) {
             if (String.IsNullOrEmpty(path)) throw new NullReferenceException();
@@ -163,14 +172,24 @@ namespace CodeStyle {
         }
 
         //TODO: change return type to the C preprocessed function
+        /*PLACEHOLDER*/
         public object PreprocessCode(List<string> lines) {
             return null;
         }
 
         //TODO: think about how to implement the whole structure
         //this method should return whole function tree with If, for, while, do_while statements
+
+        /*PLACEHOLDER*/
         public Tree<IComparable> BuildFunctionTree(List<string> functionCode) {
             return null;
         }
+
+        //TODO: find all the code blocks/lines with comments in them
+        /*PLACEHOLDER*/
+        public List<string> GetCodeComments(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            return null;
+        } 
     }
 }
