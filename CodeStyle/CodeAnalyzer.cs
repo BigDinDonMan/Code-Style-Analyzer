@@ -185,11 +185,49 @@ namespace CodeStyle {
             return null;
         }
 
-        //TODO: find all the code blocks/lines with comments in them
-        /*PLACEHOLDER*/
+        //TODO: find all the code blocks/lines with comments in them //DONE
         public List<string> GetCodeComments(List<string> lines) {
             if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
-            return null;
-        } 
+
+            var lineComments = lines.Where(s => s.Contains("//")).Select(s => s.Substring(s.IndexOf("//") + "//".Length)).ToList();
+            var code = String.Join("\n", lines.ToArray());
+            int index = 0;
+            var copy = code;
+            var copy2 = code;
+
+            List<int> startIndexes = new List<int>();
+            List<int> endIndexes = new List<int>();
+
+            while (index != -1) {
+                index = code.IndexOf("/*");
+                if (index != -1) {
+                    startIndexes.Add(index);
+                    code = code.Substring(index + 2);
+                }
+            }
+
+            index = 0;
+
+            while (index != -1) {
+                index = copy.IndexOf("*/");
+                if (index != -1) {
+                    endIndexes.Add(index);
+                    copy = copy.Substring(index + 2);
+                }
+            }
+
+            if (startIndexes.Count != endIndexes.Count) throw new ArrayTypeMismatchException();
+
+            List<string> blockComments = new List<string>();
+
+            for (int i = 0; i < startIndexes.Count; ++i) {
+                string s = copy2.Substring(startIndexes[i], endIndexes[i] - startIndexes[i]);
+                blockComments.AddRange(s.Split('\n'));
+            }
+
+            return lineComments.Concat(blockComments).Select(s => s.Replace("/*", "")).ToList();
+        }
+        
+        
     }
 }
