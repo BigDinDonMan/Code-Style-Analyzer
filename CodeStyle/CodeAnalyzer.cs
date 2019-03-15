@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.IO;
 using Newtonsoft.Json;
 
@@ -13,11 +12,18 @@ using Newtonsoft.Json;
 namespace CodeStyle {
     public class CodeAnalyzer {
 
-        public readonly string[] operators = null;
+        public readonly string[] operators              = null;
+        public readonly string[] forbiddenNames         = null;
+        public readonly string[] keywords               = null;
+        public readonly string[] builtInFunctionNames   = null;
+        public readonly char[] lookupCharList = new char[] {
+                '"', '\'', '.', ',', '/', '{', '}',
+                '(', ')', '[', ']', '+', '-', '*',
+                '&', '^', '%', '$', '#', '@', '!',
+                '?', '<', '>', '=', '|', ';', ':'
+        };
 
-        public readonly string[] keywords = null;
-
-        private static CodeAnalyzer instance = null;
+        private static CodeAnalyzer instance            = null;
 
         public static CodeAnalyzer GetInstance() {
             if (instance == null) instance = new CodeAnalyzer();
@@ -25,24 +31,58 @@ namespace CodeStyle {
         }
 
         private CodeAnalyzer() {
-            operators = GetOperators();
-            keywords = GetKeywords();
+            operators               = GetOperators();
+            keywords                = GetKeywords();
+            forbiddenNames          = GetForbiddenWords();
+            builtInFunctionNames    = GetBuiltInFunctionNames();
         }
 
-        protected string[] GetKeywords() {
+        private string[] GetKeywords() {
             string[] words = null;
             using (var reader = new StreamReader("../../ProgramFiles/keywords.json")) {
                 words = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
             return words;
         }
-        
-        protected string[] GetOperators() {
+
+        private string[] GetForbiddenWords() {
+            /*string[] words = new string[] {
+                "gowno",
+                "kurwa",
+                "cholera",
+                "pierdolic",
+                "pierdolenie",
+                "benin",
+                "xD"
+            };
+            using (var fs = new FileStream("../../ProgramFiles/forbidden.json", FileMode.OpenOrCreate)) {
+                using (var writer = new StreamWriter(fs)) {
+                    writer.Write(JsonConvert.SerializeObject(words));
+                }
+            }*/
+            string[] words = null;
+
+            using (var reader = new StreamReader("../../ProgramFiles/forbidden.json")) {
+                words = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
+            }
+
+            return words;
+        }
+
+        private string[] GetOperators() {
             string[] operators = null;
             using (var reader = new StreamReader("../../ProgramFiles/operators.json")) {
                 operators = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
             return operators;
+        }
+
+        private string[] GetBuiltInFunctionNames() {
+            List<string> names = new List<string>();
+            using (var reader = new StreamReader("../../ProgramFiles/functions.json")) {
+                names = JsonConvert.DeserializeObject<List<string>>(reader.ReadToEnd()).Where(s => !String.IsNullOrEmpty(s)).Select(s => s.Trim()).ToList();
+            }
+            return names.ToArray();
         }
 
         public List<string> LoadCode(string path) {
@@ -86,8 +126,16 @@ namespace CodeStyle {
             for (int i = 0; i < code.Length; ++i) {
 
                 func += code[i];
-                if (code[i] == '{') leftBraceCount++;
-                if (code[i] == '}') rightBraceCount++;
+                if (code[i] == '{') {
+                    if (code[i].ToString().IsBetweenTwo(code, '"', i)) continue;
+                    if (code[i].ToString().IsCommentedOut(code, i)) continue;
+                    leftBraceCount++;
+                }
+                if (code[i] == '}') {
+                    if (code[i].ToString().IsBetweenTwo(code, '"', i)) continue;
+                    if (code[i].ToString().IsCommentedOut(code, i)) continue;
+                    rightBraceCount++;
+                }
 
                 if (leftBraceCount != 0 && rightBraceCount != 0) {
                     if (leftBraceCount == rightBraceCount) {
@@ -173,8 +221,28 @@ namespace CodeStyle {
 
         //TODO: change return type to the C preprocessed function
         /*PLACEHOLDER*/
-        public object PreprocessCode(List<string> lines) {
-            return null;
+        public List<string> PreprocessCode(List<string> lines, List<Tree<string>> defineTree) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            if (Extensions.IsNullOrEmpty(defineTree)) throw new NullReferenceException();
+            //if (!File.Exists(path)) throw new FileNotFoundException();
+            var preprocessedCode = new List<string>(lines);
+            /*make a recursive function for line preprocessing that will replace any occurence of node string in a line*/
+            for (int i = 0; i < preprocessedCode.Count; ++i) {
+                foreach (var tree in defineTree) {
+                    string temp = preprocessedCode[i];
+                    ProcessCodeLine(ref temp, tree.root, tree.root);
+                    preprocessedCode[i] = temp;
+                }
+            }
+            return preprocessedCode;
+        }
+
+        /*edit this function so it doesnt target the defines inside other names (e.g. "n" in "printf")*/
+        public void ProcessCodeLine(ref string line, TreeNode<string> node, TreeNode<string> root) {
+            if (node == null || String.IsNullOrEmpty(node.Value)) throw new NullReferenceException();
+            if (root == null || String.IsNullOrEmpty(root.Value)) throw new NullReferenceException();
+            line = line.Replace(node.Value, root.Value);
+            foreach (var c in node.children) ProcessCodeLine(ref line, c, root);
         }
 
         //TODO: think about how to implement the whole structure
@@ -185,49 +253,102 @@ namespace CodeStyle {
             return null;
         }
 
-        //TODO: find all the code blocks/lines with comments in them //DONE
         public List<string> GetCodeComments(List<string> lines) {
             if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
 
-            var lineComments = lines.Where(s => s.Contains("//")).Select(s => s.Substring(s.IndexOf("//") + "//".Length)).ToList();
+            var lineComments = lines.Where(s => s.Contains("//")).ToList();
+            var comments = new List<string>();
+            
+            foreach (var line in lineComments) {
+                var matches = Regex.Matches(line, "//").Cast<Match>().ToArray();
+                var tempList = new List<string>();
+                foreach (var m in matches) {
+                    for (int i = 0; i < m.Groups.Count; ++i) {
+                        if (!m.Groups[i].Value.IsBetweenTwo(line, '"', m.Groups[i].Index)) {
+                            tempList.Add(line.Substring(m.Groups[i].Index));
+                        }
+                    } 
+                }
+                comments.AddRange(tempList);
+            }
+            
+            lineComments = comments.Select(comment => comment.Replace("//", "").Trim()).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
+
             var code = String.Join("\n", lines.ToArray());
-            int index = 0;
-            var copy = code;
-            var copy2 = code;
 
-            List<int> startIndexes = new List<int>();
-            List<int> endIndexes = new List<int>();
+            //var blockBeginnings = Regex.Matches(code, "/\\*").Cast<Match>().Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Index)).Select(m => m.Index).ToList();
+            //var blockEnds = Regex.Matches(code, "\\*/").Cast<Match>().Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Index)).Select(m => m.Index).ToList();
+            //TODO: filter out the excess block beginnings and ignore them if theyre in a line comment
 
-            while (index != -1) {
-                index = code.IndexOf("/*");
-                if (index != -1) {
-                    startIndexes.Add(index);
-                    code = code.Substring(index + 2);
+            var blockBeginnings = Regex.Matches(code, "/\\*").Cast<Match>().ToList();//Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Groups[0].Index)).Select(m => m.Groups[0].Index).ToList();
+            var blockEnds = Regex.Matches(code, "\\*/").Cast<Match>().ToList();//Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Groups[0].Index)).Select(m => m.Groups[0].Index).ToList();
+
+            var blockBegginingsIndexes = new List<int>();
+            var blockEndsIndexes = new List<int>();
+
+            foreach (Match m in blockBeginnings) {
+                foreach (Group g in m.Groups) {
+                    if (g.Value.IsBetweenTwo(code, '"', g.Index)) continue;
+                    blockBegginingsIndexes.Add(g.Index);
                 }
             }
 
-            index = 0;
-
-            while (index != -1) {
-                index = copy.IndexOf("*/");
-                if (index != -1) {
-                    endIndexes.Add(index);
-                    copy = copy.Substring(index + 2);
+            foreach (Match m in blockEnds) {
+                foreach (Group g in m.Groups) {
+                    if (g.Value.IsBetweenTwo(code, '"', g.Index)) continue;
+                    blockEndsIndexes.Add(g.Index);
                 }
             }
 
-            if (startIndexes.Count != endIndexes.Count) throw new ArrayTypeMismatchException();
-
-            List<string> blockComments = new List<string>();
-
-            for (int i = 0; i < startIndexes.Count; ++i) {
-                string s = copy2.Substring(startIndexes[i], endIndexes[i] - startIndexes[i]);
-                blockComments.AddRange(s.Split('\n'));
+            Dictionary<int, List<int>> occurences = new Dictionary<int, List<int>>();
+            
+            for (int i = 0; i < blockEndsIndexes.Count; ++i) {
+                occurences.Add(blockEndsIndexes[i], new List<int>());
+                for (int j = 0; j < blockBegginingsIndexes.Count; ++j) {
+                    if (i == 0) {
+                         if (blockBegginingsIndexes[j] < blockEndsIndexes[i]) {
+                             occurences[blockEndsIndexes[i]].Add(blockBegginingsIndexes[j]);
+                         }
+                    } else {
+                        if (blockBegginingsIndexes[j] < blockEndsIndexes[i] && !occurences[blockEndsIndexes[i - 1]].Contains(blockBegginingsIndexes[j])) {
+                            occurences[blockEndsIndexes[i]].Add(blockBegginingsIndexes[j]);
+                        }
+                    }
+                }
             }
 
-            return lineComments.Concat(blockComments).Select(s => s.Replace("/*", "")).ToList();
+            List<string> blockPairs = null;
+
+            try {
+                blockPairs = occurences.Select(entry => new Tuple<int, int>(entry.Key, entry.Value[entry.Value.Count - 1])).Select(tup => code.Substring(tup.Item2, tup.Item1 - tup.Item2)).ToList();
+            } catch (ArgumentOutOfRangeException) {
+                return null;
+            }
+
+            var blocks = new List<string>();
+
+            blockPairs.ForEach(str => blocks.AddRange(str.Split('\n')));
+
+            return lineComments.Concat(blocks).Select(s => s.Replace("/*", "").Replace("*/", "").Trim()).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
         }
         
-        
+        public double GetCommentKeywordRatio(List<string> comments) {//TODO: change the replacement of the characters to not include the operators
+    
+            var words = new List<string>();
+
+            foreach (var line in comments) {
+                string temp = line;
+                foreach (var c in lookupCharList) {
+                    temp = temp.Replace(c.ToString(), "");
+                }
+                words.AddRange(temp.Split());
+            }
+            words = words.Where(word => word.Length > 1).ToList();
+
+            double keywordCount = words.Where(s => builtInFunctionNames.Contains(s)).Count() + words.Where(s => keywords.Contains(s)).Count();
+            double normalCount = words.Where(s => !builtInFunctionNames.Contains(s) && !keywords.Contains(s)).Count();
+
+            return keywordCount / normalCount;
+        }
     }
 }
