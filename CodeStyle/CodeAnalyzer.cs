@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.IO;
 using Newtonsoft.Json;
@@ -241,7 +242,24 @@ namespace CodeStyle {
         public void ProcessCodeLine(ref string line, TreeNode<string> node, TreeNode<string> root) {
             if (node == null || String.IsNullOrEmpty(node.Value)) throw new NullReferenceException();
             if (root == null || String.IsNullOrEmpty(root.Value)) throw new NullReferenceException();
-            line = line.Replace(node.Value, root.Value);
+            var matches = Regex.Matches(line, @"\W" + node.Value + @"\W").Cast<Match>().ToArray();
+            if (matches.Length <= 0) goto end;
+            string copy = line;
+            var builder = new StringBuilder(copy);
+            var indexes = new List<Tuple<int, int>>();
+            foreach (var match in matches) {
+                foreach (Group g in match.Groups) {
+                    indexes.Add(new Tuple<int, int>(g.Index, g.Index + node.Value.Length));
+                }
+            }
+            //TODO: fix the ArgumentOutOfRangeException
+            indexes.ForEach(tup => {
+                builder.Remove(tup.Item1 + 1, tup.Item2 - tup.Item1);
+                builder.Insert(tup.Item1 + 1, root.Value);
+            });
+            line = builder.ToString();
+            //Console.WriteLine(line);
+            end:
             foreach (var c in node.children) ProcessCodeLine(ref line, c, root);
         }
 

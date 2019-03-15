@@ -96,5 +96,16 @@ namespace CodeStyle {
             if (startIndex < 0) throw new ArgumentException("startindex is less than zero");
             return s.IsBetweenTwo(target, new Tuple<string, string>("//", "\n"), startIndex) || s.IsBetweenTwo(target, new Tuple<string, string>("/*", "*/"), startIndex);
         }
+        public static bool IsNumeric(this string s) {
+            if (string.IsNullOrEmpty(s)) return false;
+
+            try {
+                Int32.Parse(s);
+            } catch (Exception) {
+                return false;
+            }
+
+            return !false;
+        }
     }
 }
