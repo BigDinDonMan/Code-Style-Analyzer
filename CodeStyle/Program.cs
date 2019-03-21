@@ -26,6 +26,10 @@ namespace CodeStyle {
             var s1 = CodeAnalyzer.GetInstance().GetAndClearComments(preprocessedFuncs[0].Split('\n').ToList());
             s1.Item2.Print();
             Console.WriteLine("{0}", CodeAnalyzer.GetInstance().CountForbiddenWords(s1.Item2));
+            s1.Item1.Clear();
+            s1.Item2.Clear();
+            
+            GC.Collect();
             Console.ReadKey();
         }
     }
