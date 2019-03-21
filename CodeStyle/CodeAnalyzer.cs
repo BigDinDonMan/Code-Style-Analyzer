@@ -5,25 +5,34 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.IO;
 using Newtonsoft.Json;
+using System.Threading.Tasks;
 
 //TODO: implement function tree
 //TODO: implement C Function object
 //TODO: filter out commented out code 
 
+
 namespace CodeStyle {
+
+    public enum LineProcessing {
+        All = 0,
+        BracesOnly = 1,
+        KeywordsOnly = 2
+    }
+
+
     public class CodeAnalyzer {
 
         public readonly string[] operators              = null;
         public readonly string[] forbiddenNames         = null;
         public readonly string[] keywords               = null;
         public readonly string[] builtInFunctionNames   = null;
-        public readonly char[] lookupCharList = new char[] {
+        public readonly char[] lookupCharList           = new char[] {
                 '"', '\'', '.', ',', '/', '{', '}',
                 '(', ')', '[', ']', '+', '-', '*',
                 '&', '^', '%', '$', '#', '@', '!',
                 '?', '<', '>', '=', '|', ';', ':'
         };
-
         private static CodeAnalyzer instance            = null;
 
         public static CodeAnalyzer GetInstance() {
@@ -43,22 +52,24 @@ namespace CodeStyle {
             using (var reader = new StreamReader("../../ProgramFiles/keywords.json")) {
                 words = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
+            Array.Sort(words, 0, words.Length);
             return words;
         }
 
         private string[] GetForbiddenWords() {
-            /*string[] words = new string[] {
+         /*   string[] _words = new string[] {
                 "gowno",
                 "kurwa",
                 "cholera",
                 "pierdolic",
                 "pierdolenie",
                 "benin",
-                "xD"
+                "xD",
+                "chuj"
             };
             using (var fs = new FileStream("../../ProgramFiles/forbidden.json", FileMode.OpenOrCreate)) {
                 using (var writer = new StreamWriter(fs)) {
-                    writer.Write(JsonConvert.SerializeObject(words));
+                    writer.Write(JsonConvert.SerializeObject(_words));
                 }
             }*/
             string[] words = null;
@@ -66,7 +77,7 @@ namespace CodeStyle {
             using (var reader = new StreamReader("../../ProgramFiles/forbidden.json")) {
                 words = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
-
+            Array.Sort(words, 0, words.Length);
             return words;
         }
 
@@ -75,6 +86,7 @@ namespace CodeStyle {
             using (var reader = new StreamReader("../../ProgramFiles/operators.json")) {
                 operators = JsonConvert.DeserializeObject<string[]>(reader.ReadToEnd());
             }
+            Array.Sort(operators, 0, operators.Length);
             return operators;
         }
 
@@ -83,6 +95,7 @@ namespace CodeStyle {
             using (var reader = new StreamReader("../../ProgramFiles/functions.json")) {
                 names = JsonConvert.DeserializeObject<List<string>>(reader.ReadToEnd()).Where(s => !String.IsNullOrEmpty(s)).Select(s => s.Trim()).ToList();
             }
+            names.Sort();
             return names.ToArray();
         }
 
@@ -118,15 +131,15 @@ namespace CodeStyle {
                     copy = s;
                 }
             }
-            string code = String.Join("\n", copy.ToArray());
+            string code = String.Join("\n", copy);
             List<string> functions = new List<string>();
             int leftBraceCount = 0, rightBraceCount = 0;
 
-            string func = null;
+            StringBuilder func = new StringBuilder();
 
             for (int i = 0; i < code.Length; ++i) {
 
-                func += code[i];
+                func.Append(code[i]);
                 if (code[i] == '{') {
                     if (code[i].ToString().IsBetweenTwo(code, '"', i)) continue;
                     if (code[i].ToString().IsCommentedOut(code, i)) continue;
@@ -141,8 +154,8 @@ namespace CodeStyle {
                 if (leftBraceCount != 0 && rightBraceCount != 0) {
                     if (leftBraceCount == rightBraceCount) {
                         leftBraceCount = rightBraceCount = 0;
-                        functions.Add(func);
-                        func = null;
+                        functions.Add(func.ToString());
+                        func.Clear();
                     }
                 }
 
@@ -157,8 +170,28 @@ namespace CodeStyle {
             if (first.Length == 0) return second.Length;
             if (second.Length == 0) return first.Length;
 
-            int width = first.Length, height = second.Length;
-            int[,] levenshteinMatrix = new int[height, width];
+            int m = first.Length + 1, n = second.Length + 1;
+            int[,] levenshteinMatrix = new int[m, n];
+            for (int i = 0; i < m; ++i) {
+                levenshteinMatrix[i, 0] = i;   
+            }
+            for (int j = 1; j < n; ++j) {
+                levenshteinMatrix[0, j] = j;
+            }
+            int cost = 0;
+            for (int i = 1; i < m; ++i) {
+                for (int j = 1; j < n; ++j) {
+                    if (first[i - 1] != second[j - 1]) cost = 1;
+                    else cost = 0;
+                    levenshteinMatrix[i, j] = Math.Min(
+                        Math.Min(levenshteinMatrix[i - 1, j] + 1, levenshteinMatrix[i, j - 1] + 1),
+                        levenshteinMatrix[i - 1, j - 1] + cost
+                    );
+                }
+            }
+            #region
+            /*int width = first.Length, height = second.Length;
+            int[,] levenshteinMatrix = new int[height + 1, width + 1];
 
             for (int i = 0; i < width; ++i) {
                 levenshteinMatrix[0, i] = i;
@@ -168,20 +201,22 @@ namespace CodeStyle {
                 levenshteinMatrix[i, 0] = i;
             }
 
-            int cost = 0;
+            int cost = 0;*/
 
-            for (int i = 1; i < height; ++i) {
-                for (int j = 1; j < width; ++j, cost = 0) {
-                    if (first[j] != second[i]) cost = 1;
-                    int minimum = Math.Min(
-                        Math.Min(levenshteinMatrix[i - 1, j] + 1, levenshteinMatrix[i, j - 1] + 1),
-                        levenshteinMatrix[i - 1, j - 1] + cost
-                    );
-                    levenshteinMatrix[i, j] = minimum;
-                }
-            }
+            /* for (int i = 1; i < height; ++i) {
+                 for (int j = 1; j < width; ++j, cost = 0) {
+                     if (first[j] != second[i]) cost = 1;
+                     int minimum = Math.Min(
+                         Math.Min(levenshteinMatrix[i - 1, j] + 1, levenshteinMatrix[i, j - 1] + 1),
+                         levenshteinMatrix[i - 1, j - 1] + cost
+                     );
+                     levenshteinMatrix[i, j] = minimum;
+                 }
+             }*/
 
-            return levenshteinMatrix[height - 1, width - 1];
+            // return levenshteinMatrix[height - 1, width - 1];
+            #endregion
+            return levenshteinMatrix[m - 1, n - 1];
         }
 
         public List<Tree<string>> BuildDefineTree(string path) {
@@ -221,28 +256,32 @@ namespace CodeStyle {
         }
 
         //TODO: change return type to the C preprocessed function
-        /*PLACEHOLDER*/
-        public List<string> PreprocessCode(List<string> lines, List<Tree<string>> defineTree) {
+        public List<string> PreprocessCode(List<string> lines, List<Tree<string>> defineTree, LineProcessing processingOption = LineProcessing.All) {
             if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
             if (Extensions.IsNullOrEmpty(defineTree)) throw new NullReferenceException();
-            //if (!File.Exists(path)) throw new FileNotFoundException();
             var preprocessedCode = new List<string>(lines);
-            /*make a recursive function for line preprocessing that will replace any occurence of node string in a line*/
             for (int i = 0; i < preprocessedCode.Count; ++i) {
                 foreach (var tree in defineTree) {
                     string temp = preprocessedCode[i];
-                    ProcessCodeLine(ref temp, tree.root, tree.root);
+                    ProcessCodeLine(ref temp, tree.root, tree.root, processingOption);
                     preprocessedCode[i] = temp;
                 }
             }
+            
             return preprocessedCode;
         }
 
-        /*edit this function so it doesnt target the defines inside other names (e.g. "n" in "printf")*/
-        public void ProcessCodeLine(ref string line, TreeNode<string> node, TreeNode<string> root) {
+        public void ProcessCodeLine(ref string line, TreeNode<string> node, TreeNode<string> root, LineProcessing processingOption = LineProcessing.All) {
             if (node == null || String.IsNullOrEmpty(node.Value)) throw new NullReferenceException();
             if (root == null || String.IsNullOrEmpty(root.Value)) throw new NullReferenceException();
-            var matches = Regex.Matches(line, @"\W" + node.Value + @"\W").Cast<Match>().ToArray();
+            if (processingOption == LineProcessing.BracesOnly) {
+                if (root.Value != "{" && root.Value != "}") return;
+            }
+            if (node.Value == root.Value) goto end;
+            if (line.Contains("*/") || line.Contains("#define")) return;
+            #region
+            /*var matches = Regex.Matches(line, @"\W" + Regex.Escape(node.Value) + @"\W?\b?").Cast<Match>().ToArray();
+
             if (matches.Length <= 0) goto end;
             string copy = line;
             var builder = new StringBuilder(copy);
@@ -252,20 +291,80 @@ namespace CodeStyle {
                     indexes.Add(new Tuple<int, int>(g.Index, g.Index + node.Value.Length));
                 }
             }
-            //TODO: fix the ArgumentOutOfRangeException
             indexes.ForEach(tup => {
                 builder.Remove(tup.Item1 + 1, tup.Item2 - tup.Item1);
                 builder.Insert(tup.Item1 + 1, root.Value);
             });
-            line = builder.ToString();
-            //Console.WriteLine(line);
+            line = builder.ToString();*/
+            //end:
+            //int index = 0;
+            #endregion
+
+            int index = 0;
+            Regex r = new Regex(@"\W" + node.Value + @"\W?\b?");
+            Regex r1 = new Regex(@"^?[a-zA-Z]" + node.Value + @"[a-zA-Z]");
+            while ((index = line.IndexOf(node.Value, index)) != -1) {
+                if (node.Value.IsBetweenTwo(line, '"', index)) {
+                    index++;
+                    continue;
+                }
+                Match m;
+                try {
+                    string substr = line.Substring(index - 1, node.Value.Length + 1);
+                    m = r1.Match(substr);
+                    if (m.Success) {
+                        index += node.Value.Length;
+                        continue;
+                    }
+                    m = r.Match(substr);
+                    if (!m.Success) {
+                        index += node.Value.Length;
+                        continue;
+                    }
+                    m = null;
+                } catch (ArgumentOutOfRangeException) {}
+                line = line.Remove(index, node.Value.Length).Insert(index, root.Value);
+            }
+
             end:
-            foreach (var c in node.children) ProcessCodeLine(ref line, c, root);
+            foreach (var c in node.children) ProcessCodeLine(ref line, c, root, processingOption);
+        }
+
+        public List<string> ClearComments(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+
+            var linesCopy = new List<string>(lines);
+            /*clearing line comments*/
+            for (int i = 0; i < lines.Count; ++i) {
+                int _index = linesCopy[i].IndexOf("//");
+                if (_index == -1 || "//".IsBetweenTwo(lines[i], '"', _index)) continue;
+                linesCopy[i] = linesCopy[i].Remove(_index);
+            }
+            var codeLines = linesCopy.Where(line => !String.IsNullOrWhiteSpace(line)).ToList();
+
+            /*clearing block comments*/
+            var code = String.Join("\n", codeLines);
+            int index = 0;
+            while ((index = code.IndexOf("/*", index)) != -1) {
+                if ("/*".IsBetweenTwo(code, '"', index)) {
+                    index++;
+                    continue;
+                }
+                int temp;
+                while (true) {
+                    temp = code.IndexOf("*/", index);
+                    if (!"*/".IsBetweenTwo(code, '"', temp)) break;
+                    else temp++;
+                }
+                try {
+                    code = code.Remove(index, temp + 2 - index);
+                } catch (ArgumentOutOfRangeException) { continue; }
+            }
+            return code.Split('\n').Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
         }
 
         //TODO: think about how to implement the whole structure
         //this method should return whole function tree with If, for, while, do_while statements
-
         /*PLACEHOLDER*/
         public Tree<IComparable> BuildFunctionTree(List<string> functionCode) {
             return null;
@@ -293,9 +392,6 @@ namespace CodeStyle {
             lineComments = comments.Select(comment => comment.Replace("//", "").Trim()).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
 
             var code = String.Join("\n", lines.ToArray());
-
-            //var blockBeginnings = Regex.Matches(code, "/\\*").Cast<Match>().Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Index)).Select(m => m.Index).ToList();
-            //var blockEnds = Regex.Matches(code, "\\*/").Cast<Match>().Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Index)).Select(m => m.Index).ToList();
             //TODO: filter out the excess block beginnings and ignore them if theyre in a line comment
 
             var blockBeginnings = Regex.Matches(code, "/\\*").Cast<Match>().ToList();//Where(m => !m.Groups[0].Value.IsBetweenTwo(code, '"', m.Groups[0].Index)).Select(m => m.Groups[0].Index).ToList();
@@ -349,6 +445,10 @@ namespace CodeStyle {
 
             return lineComments.Concat(blocks).Select(s => s.Replace("/*", "").Replace("*/", "").Trim()).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
         }
+
+        public Tuple<List<string>, List<string>> GetAndClearComments(List<string> lines) {
+            return new Tuple<List<string>, List<string>>(GetCodeComments(lines), ClearComments(lines));
+        }
         
         public double GetCommentKeywordRatio(List<string> comments) {//TODO: change the replacement of the characters to not include the operators
     
@@ -357,7 +457,7 @@ namespace CodeStyle {
             foreach (var line in comments) {
                 string temp = line;
                 foreach (var c in lookupCharList) {
-                    temp = temp.Replace(c.ToString(), "");
+                    temp = temp.Replace(c.ToString(), " ");
                 }
                 words.AddRange(temp.Split());
             }
@@ -367,6 +467,49 @@ namespace CodeStyle {
             double normalCount = words.Where(s => !builtInFunctionNames.Contains(s) && !keywords.Contains(s)).Count();
 
             return keywordCount / normalCount;
+        }
+
+        public TreeNode<string> GetIfStatements(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            return null;
+        }
+
+        public TreeNode<string> GetForLoops(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            return null;
+        }
+
+        public TreeNode<string> GetWhileLoops(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            return null;
+        }
+        
+        public TreeNode<string> GetDoWhileLoops(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            return null;
+        }
+
+        public int CountForbiddenWords(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+
+            var code = String.Join("\n", lines);
+
+            foreach (var c in lookupCharList) {
+                code = code.Replace(c.ToString(), " ");
+            }
+
+            HashSet<string> uniques = new HashSet<string>();
+            foreach (var word in code.Split()) {
+                if (String.IsNullOrWhiteSpace(word) || word.IsNumeric()) continue;
+                foreach (var forbiddenWord in forbiddenNames) {
+                    int difference = LevenshteinDistance(word, forbiddenWord);
+                    if (difference <= (word.Length > forbiddenWord.Length ? forbiddenWord.Length : word.Length) / 2) {
+                        if (keywords.Contains(word)) continue;
+                        uniques.Add(word);
+                    }
+                }
+            }
+            return uniques.Count;
         }
     }
 }

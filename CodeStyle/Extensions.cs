@@ -3,17 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace CodeStyle {
+
+
     public static class Extensions {
 
         /*list extensions*/
         public static bool IsNullOrEmpty<T>(List<T> l) => l == null || l.Count == 0;
         public static void Print<T>(this List<T> l) {
             if (IsNullOrEmpty(l)) return;
-            int counter = 1;
             foreach (var x in l) {
-                Console.WriteLine("Element nr {0}", counter);
                 Console.WriteLine(x.ToString());
-                counter++;
             }
         }
 
