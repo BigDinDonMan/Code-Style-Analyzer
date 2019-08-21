@@ -64,6 +64,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CFunction.cs" />
+    <Compile Include="Code.cs" />
+    <Compile Include="CodeAnalysis.cs" />
     <Compile Include="CodeAnalyzer.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Program.cs" />
@@ -87,6 +89,12 @@
       <ProductName>.NET Framework 3.5 SP1</ProductName>
       <Install>false</Install>
     </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\Users\Maciek\source\repos\Utils\Utils.csproj">
+      <Project>{fe46066d-ae56-49a4-92d1-6bff8fe5562c}</Project>
+      <Name>Utils</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.27428.2011
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeStyle", "CodeStyle.csproj", "{F2832E9C-456E-48AE-A8DB-41C00B0E25E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utils", "C:\Users\Maciek\source\repos\Utils\Utils.csproj", "{FE46066D-AE56-49A4-92D1-6BFF8FE5562C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{F2832E9C-456E-48AE-A8DB-41C00B0E25E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F2832E9C-456E-48AE-A8DB-41C00B0E25E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F2832E9C-456E-48AE-A8DB-41C00B0E25E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FE46066D-AE56-49A4-92D1-6BFF8FE5562C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE46066D-AE56-49A4-92D1-6BFF8FE5562C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE46066D-AE56-49A4-92D1-6BFF8FE5562C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE46066D-AE56-49A4-92D1-6BFF8FE5562C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

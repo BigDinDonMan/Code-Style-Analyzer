@@ -7,30 +7,48 @@ using static CodeStyle.Tree<string>;
 using System.IO;
 using Newtonsoft.Json;
 using System.Diagnostics;
+using StringUtils;
+using Utils;
 
 namespace CodeStyle {
     class Program {
         static void Main(string[] args) {
-            string codePath = @"xxxxxxxxx.c";
-            var code = CodeAnalyzer.GetInstance().LoadCode(codePath);
-            var defines = CodeAnalyzer.GetInstance().BuildDefineTree(codePath);
-            var codeWithBraces = CodeAnalyzer.GetInstance().PreprocessCode(code, defines, LineProcessing.BracesOnly);
-            //codeWithBraces?.Print();
-            var funcs = CodeAnalyzer.GetInstance().GetFunctions(codeWithBraces);
-           // funcs?.Print();
-            List<string> preprocessedFuncs = new List<string>();
-            foreach (var func in funcs) {
-                preprocessedFuncs.Add(String.Join("\n", CodeAnalyzer.GetInstance().PreprocessCode(func.Split('\n').ToList(), defines)));
+            string sourcepath = @"4.31.c";
+            List<string> loadedCode = CodeAnalysis.LoadCodeLines(sourcepath);
+
+            List<Tree<string>> defineTree = CodeAnalysis.BuildNonMacroDefineTree(CodeAnalysis.GetNonMacroDefines(loadedCode));
+            List<Tree<string>> invalidDefines = CodeAnalysis.GetInvalidDefines(defineTree);
+
+            loadedCode = CodeAnalysis.ClearCodeComments(loadedCode);
+            loadedCode = CodeAnalysis.FullFilter(loadedCode);
+
+            int[] operatorsWithoutSpacesOccurences = CodeAnalysis.CheckOperatorsSpaces(loadedCode);
+
+            Console.WriteLine(operatorsWithoutSpacesOccurences.Length);
+
+            string code = String.Join("\n", loadedCode);
+            foreach (var index in operatorsWithoutSpacesOccurences) {
+                try {
+                    Console.WriteLine(code.Substring(index - 1, 3));
+                } catch (Exception e) {
+
+                }
             }
-            preprocessedFuncs?.Print();
-            var s1 = CodeAnalyzer.GetInstance().GetAndClearComments(preprocessedFuncs[0].Split('\n').ToList());
-            s1.Item2.Print();
-            Console.WriteLine("{0}", CodeAnalyzer.GetInstance().CountForbiddenWords(s1.Item2));
-            s1.Item1.Clear();
-            s1.Item2.Clear();
-            
-            GC.Collect();
+
             Console.ReadKey();
+        }
+
+        static void WhileCheck() {
+            string whileLoop = File.ReadAllText("test.c");
+            int index = whileLoop.IndexOf("while");
+            String s = null;
+            while (whileLoop[index] != '}') {
+                s += whileLoop[index++];
+            }
+            foreach (var c in s) {
+                Console.WriteLine("numeric: {0}, character: {1}", (int)c, c);
+            }
+            Console.WriteLine("tab: {0}", (int)'\t');
         }
     }
 }

@@ -16,7 +16,7 @@ namespace CodeStyle {
         Concerning = 75,
         Unacceptable = 100
     }
-
+    //if there is a define for a keyword or operator then reduce the points
     public class StyleStatistic {//flags are: commented out code, using defines, using "forbidden" names, using good variable names (not i, j, x, m, n etc.), indents, using comments in the intended way
 
         public const int MAX_SCORE = 150;

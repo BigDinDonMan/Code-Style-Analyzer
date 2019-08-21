@@ -54,37 +54,24 @@ namespace CodeStyle {
             bool left, right;
             left = right = false;
             string temp = null;
-            for (int i = startIndex; i >= 0; --i) {
+            for (int i = startIndex; i >= pair.Item1.Length; --i) {
                 try {
                     temp = target.Substring(i - pair.Item1.Length, pair.Item1.Length);
-                } catch (ArgumentOutOfRangeException) { continue; }
-
-                if (pair.Item1 == "//") {
-                    if (target[i] == '\n') {
-                        left = false;
+                    if (temp == pair.Item1) {
+                        left = true;
                         break;
                     }
-                }
-
-                if (temp == pair.Item1) {
-                    left = true;
-                    break;
-                }
-                
+                } catch (ArgumentOutOfRangeException) {}
             }
-
-            for (int i = startIndex + 1; i < target.Length; ++i) {
+            for (int i = startIndex + s.Length; i < target.Length; ++i) {
                 try {
                     temp = target.Substring(i, pair.Item2.Length);
-                } catch (ArgumentOutOfRangeException) { continue; }
-                if (temp == pair.Item2) {
-                    right = true;
-                    break;
-                }
+                    if (temp == pair.Item2) {
+                        right = true;
+                        break;
+                    }
+                } catch (ArgumentOutOfRangeException) { }
             }
-
-            
-
             return left && right;
         }
         public static int GetOcurrenceCount(this string s, string toFind) {

@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using CollectionUtils;
 
 namespace CodeStyle {
     public class Tree<T> {
         public TreeNode<T> root;
 
         public Tree(TreeNode<T> root) {
-            this.root = root;// ?? throw new ArgumentNullException();
+            //this.root = root;// ?? throw new ArgumentNullException();
+            SetRoot(root);
         }
         
         public static void Print(TreeNode<T> root) {
@@ -27,22 +29,21 @@ namespace CodeStyle {
         }
 
         public void SetRoot(TreeNode<T> newRoot) {
-            this.root = newRoot ?? throw new NullReferenceException();
+            this.root = newRoot;
         } 
 
         public static void ClearTree(TreeNode<T> root) {
-            if (root.children.Count == 0) {
+            if (root.children.IsEmpty()) {
                 root = null;
                 return;
             }
             foreach (var c in root.children) ClearTree(c);
             root.children.Clear();
-            root = null;
         }
 
         public static TreeNode<T> Find(TreeNode<T> root, T key) {
             if (root == null) throw new NullReferenceException();
-            if (root.children.Count == 0) {
+            if (root.children.IsEmpty()) {
                 return root.Value.Equals(key) ? root : null;
             }
             if (root.Value.Equals(key)) return root;
@@ -55,6 +56,7 @@ namespace CodeStyle {
 
         ~Tree() {
             ClearTree(this.root);
+            this.root = null;
         }
     }
 }

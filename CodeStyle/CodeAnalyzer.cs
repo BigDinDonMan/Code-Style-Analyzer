@@ -35,8 +35,11 @@ namespace CodeStyle {
         };
         private static CodeAnalyzer instance            = null;
 
+        static CodeAnalyzer() {
+            instance = new CodeAnalyzer();
+        }
+
         public static CodeAnalyzer GetInstance() {
-            if (instance == null) instance = new CodeAnalyzer();
             return instance;
         }
 
@@ -510,6 +513,30 @@ namespace CodeStyle {
                 }
             }
             return uniques.Count;
+        }
+
+        public List<Tuple<string, int>> MeasureIndents(List<string> lines) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            List<Tuple<string, int>> result = new List<Tuple<string, int>>();
+
+            Func<string, int> indentCount = new Func<string, int>((line) => {
+                if (String.IsNullOrWhiteSpace(line)) return -1;
+                line = line.Replace("\t", "    ");
+                int count = 0;
+                foreach (var c in line) {
+                    if (!Char.IsWhiteSpace(c)) break;
+                    count++;
+                }
+                return count;
+            });
+
+            foreach (var line in lines) {
+                int res = indentCount(line);
+                if (res == -1) continue;
+                result.Add(new Tuple<string, int>(line, indentCount(line)));
+            }
+
+            return result;
         }
     }
 }
