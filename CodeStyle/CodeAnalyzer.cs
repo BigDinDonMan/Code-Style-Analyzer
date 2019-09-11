@@ -14,11 +14,7 @@ using System.Threading.Tasks;
 
 namespace CodeStyle {
 
-    public enum LineProcessing : byte {
-        All = 0,
-        BracesOnly = 1,
-        KeywordsOnly = 2
-    }
+    
 
 
     public class CodeAnalyzer {

@@ -7,7 +7,6 @@ using Newtonsoft.Json;
 using StringUtils;
 using System.Text.RegularExpressions;
 using CollectionUtils;
-using GeneralUtils;
 
 //TODO: create functions that will get defines from all the files (header, main file etc.) and will load all the functions from the files
 //TODO: create a function called ParseCodeBlock that parses the code until the brace counts are equal (like the for loops in ParseFunctions)
@@ -22,7 +21,22 @@ using GeneralUtils;
      
      */
 
+// check if someone is using a define in while, do while and for loops or a plain number
+// use levenshtein to check if variable names arent swearwords, stupid names etc.
+
+
 namespace CodeStyle {
+
+    public enum LineProcessing : byte {
+        All = 0,
+        BracesOnly = 1,
+        KeywordsOnly = 2
+    }
+
+    public enum OperatorContext : byte {
+        None, Unary, Binary, IncrementOrDecrement
+    }
+
     public static class CodeAnalysis {
         public static readonly string[] operators = null;
         public static readonly string[] forbiddenNames = null;
@@ -39,7 +53,16 @@ namespace CodeStyle {
             "&&", "||", "&", "|", "^", "<<", ">>", ">>=", "<<=", "=", 
             "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", "?", ":"
         };
+        public static readonly string[] equalityOperators = new string[] {
+            "=", "==", "!=", "<", "<=", ">", ">=",
+            "%=", ">>=", "<<=", "+=", "-=",
+            "/=", "*=", "|=", "&=", "^="
+        };
+        public static readonly string[] baseTypes = new string[] {
+            "char", "short", "int", "float", "double", "long"
+        };
         public static readonly int checkBackValue = 10;
+        public const int MAX_LINE_LENGTH = 150;
 
         static CodeAnalysis() {
             operators = GetOperators();
@@ -81,12 +104,18 @@ namespace CodeStyle {
 
         #region Filter functions
 
+        
+
         public static List<string> FilterOutPreprocessor(List<string> lines) {
+
+            bool IsPreprocessorLineExcludingDefines(string s) {
+                return s.Contains("#include") || s.Contains("#ifndef") || s.Contains("#ifdef");
+            }
 
             var filtered = new List<string>();
 
             for (int i = 0; i < lines.Count; ++i) {
-                if (lines[i].Contains("#include")) continue; //if line contains include then we simply skip it
+                if (IsPreprocessorLineExcludingDefines(lines[i])) continue; //if line contains include then we simply skip it
                 if (lines[i].Contains("#define")) { //if a line contains define
                     try {
                         if (lines[i + 1].Contains("#define")) continue;//we check if the next line is also a define, if it is then its fine
@@ -121,21 +150,78 @@ namespace CodeStyle {
         }
 
         public static List<string> FilterOutTypedefsAndStructs(List<string> lines) {
-            Regex typedefPattern, structPattern;
+            Regex typedefPattern, structPattern, unionPattern;
             string code = String.Join("\n", lines);
             typedefPattern = new Regex(@"typedef (.|\r?\n)*?;");
             structPattern = new Regex(@"struct .*\s*(\r?\n)*\{(.|\r?\n)*?\};?");
-            string withoutTypedefs = Regex.Replace(code, typedefPattern.ToString(), "");
-            string withoutStructsAndTypedefs = Regex.Replace(withoutTypedefs, structPattern.ToString(), "");
+            unionPattern = new Regex(@"union .*\s*(\r?\n)*\{(.|\r?\n)*?\};?");
+            
+            string withoutStructs = structPattern.Replace(code, "");
+            string withoutUnions = unionPattern.Replace(withoutStructs, "");
+            string finalResult = typedefPattern.Replace(withoutUnions, "");
 
-            return withoutStructsAndTypedefs.SplitLines();
+            return finalResult.SplitLines();
         }
 
         #endregion
 
         #region Consistency of code (braces and spaces etc.)
 
+
+        //sprawdzić co jest po dwóch stronach (-5 jest dobre, ale - 500 jest źle
         public static int[] CheckOperatorsSpaces(List<string> lines) {//returns an array with indexes of operators without spaces
+
+            bool IsOperatorException(string s) {
+                string[] ops = new string[] { "+", "-", "&", "*" };
+                return ops.Contains(s);
+            }
+
+            OperatorContext GetOperatorContext(string s, int index, string op, out bool hasSpaceLeft, out bool hasSpaceRight) {
+                int i = index - 1, j = index + 1;
+                hasSpaceLeft = hasSpaceRight = false;
+                while (Char.IsWhiteSpace(s[i]) || s[i].Equals('(') || s[i].Equals(')')) {
+                    if (Char.IsWhiteSpace(s[i])) {
+                        hasSpaceLeft = true;
+                    }
+                    i--;
+                }
+                char left, right;
+                left = s[i];
+                while (Char.IsWhiteSpace(s[j]) || s[j].Equals('(') || s[j].Equals(')')) {
+                    if (Char.IsWhiteSpace(s[j])) {
+                        hasSpaceRight = true;
+                    }
+                    j++;
+                }
+                right = s[j];
+                bool leftResult, rightResult, contains;
+                switch (op) {
+                    case "+":
+                    case "-":
+                        contains = equalityOperators.Contains(left.ToString());
+                        rightResult = (Char.IsLetterOrDigit(right) || right.Equals('_'));
+                        if ((left != '-' && Char.IsPunctuation(left)) && rightResult) {
+                            return OperatorContext.Unary;
+                        } else if (contains && rightResult) {
+                            return OperatorContext.Unary;
+                        } else if (!contains && rightResult) {
+                            return OperatorContext.Binary;
+                        } else if (op.Equals(left.ToString()) || op.Equals(right.ToString())) {
+                            return OperatorContext.IncrementOrDecrement;
+                        }
+                        break;
+
+                    case "*":
+
+                        break;
+
+                    case "&":
+                        leftResult = Char.IsPunctuation(left) || operators.Contains(left.ToString());
+                        rightResult = Char.IsLetter(right);
+                        return leftResult && rightResult ? OperatorContext.Unary : OperatorContext.Binary;
+                }
+                return OperatorContext.None;
+            }
 
             var occurenceList = new List<int>();
             string code = String.Join("\n", lines);
@@ -145,28 +231,66 @@ namespace CodeStyle {
                     lenOne = code[i].ToString();
                     lenTwo = code.Substring(i, 2);
                     lenThree = code.Substring(i, 3);
+
                     if (operatorsWithSpaces.Contains(lenThree) && !lenThree.IsBetweenTwo(code, '"', i)) {
-                        if (code[i - 1] != ' ' && code[i + lenThree.Length] != ' ') {
+                        if (code[i - 1] != ' ' || code[i + lenThree.Length] != ' ') {
                             occurenceList.Add(i);
                         }
-                        i += lenOne.Length;
+                        i += lenThree.Length;
                     } else if (operatorsWithSpaces.Contains(lenTwo) && !lenTwo.IsBetweenTwo(code, '"', i)) {
-                        if (code[i - 1] != ' ' && code[i + lenTwo.Length] != ' ') {
+                        if (code[i - 1] != ' ' || code[i + lenTwo.Length] != ' ') {
                             occurenceList.Add(i);
                         }
                         i += lenTwo.Length;
                     } else if (operatorsWithSpaces.Contains(lenOne) && !lenOne.IsBetweenTwo(code, '"', i)) {
-                        if (code[i - 1] != ' ' && code[i + lenTwo.Length] != ' ') {
-                            occurenceList.Add(i);
+                        if (IsOperatorException(lenOne)) {
+                            OperatorContext context = GetOperatorContext(code, i, lenOne, out bool leftSpace, out bool rightSpace);
+                            if (context.Equals(OperatorContext.IncrementOrDecrement)) {
+                                i++;
+                                continue;
+                            }
+                            if (context.Equals(OperatorContext.Binary)) {
+                                if (!leftSpace || !rightSpace) {
+                                    occurenceList.Add(i);
+                                    i++;
+                                }
+                            }
+                        } else {
+                            if (code[i - 1] != ' ' && code[i + lenOne.Length] != ' ') {
+                                occurenceList.Add(i);
+                                i++;
+                            }
                         }
-                        i += lenOne.Length;
                     }
+
+                    #region
+                    //if (lenTwo.Equals("++") || lenTwo.Equals("--")) {
+                    //    i += lenTwo.Length;
+                    //    continue;
+                    //}
+
+                    //if (operatorsWithSpaces.Contains(lenThree) && !lenThree.IsBetweenTwo(code, '"', i)) {
+                    //    if (code[i - 1] != ' ' && code[i + lenThree.Length] != ' ') {
+                    //        occurenceList.Add(i);
+                    //    }
+                    //    i += lenThree.Length;
+                    //} else if (operatorsWithSpaces.Contains(lenTwo) && !lenTwo.IsBetweenTwo(code, '"', i)) {
+                    //    if (code[i - 1] != ' ' && code[i + lenTwo.Length] != ' ') {
+                    //        occurenceList.Add(i);
+                    //    }
+                    //    i += lenTwo.Length;
+                    //} else if (operatorsWithSpaces.Contains(lenOne) && !lenOne.IsBetweenTwo(code, '"', i)) {
+                    //    if (code[i - 1] != ' ' && code[i + lenOne.Length] != ' ') {
+                    //        occurenceList.Add(i);
+                    //    }
+                    //    i += lenOne.Length;
+                    //}
+                    #endregion
                 } catch (ArgumentOutOfRangeException) {}
             }
 
             return occurenceList.ToArray();
         }
-
 
         public static bool AreBraceNewlinesConsistent(List<string> lines) {
 
@@ -175,26 +299,95 @@ namespace CodeStyle {
             int[] braceIndexes = code.FindAll("{");
 
             foreach (var i in braceIndexes) {
-                int counter = 0;
+                //int counter = 0;
+                //bool found = false;
+                //for (int j = i; counter < checkBackValue; ++counter, --j) {
+                //    try {
+                //        if (code[j] == '\n' && !'\n'.ToString().IsBetweenTwo(code, '"', j)) {
+                //            found = true;
+                //            break;
+                //        }
+                //    } catch (ArgumentOutOfRangeException) { }
+                //}
+                //if (found) {
+                //    newlineBraces++;
+                //} else {
+                //    sameLineBraces++;
+                //}
+                //counter = 0;
+                //found = false;
                 bool found = false;
-                for (int j = i; counter < checkBackValue; ++counter, --j) {
+                for (int j = i - 1; j > 0; --j) {
                     try {
-                        if (code[j] == '\n' && !'\n'.ToString().IsBetweenTwo(code, '"', j)) {
+                        if (!Char.IsWhiteSpace(code[j])) break;
+                        if (code[j] == '\n' && !code[j].ToString().IsBetweenTwo(code, '"', j)) {
                             found = true;
-                            Console.WriteLine(code.Substring(i - 5, 10));
                             break;
                         }
-                    } catch (ArgumentOutOfRangeException) { }
+                    } catch (ArgumentOutOfRangeException) {}
                 }
                 if (found) {
                     newlineBraces++;
                 } else {
                     sameLineBraces++;
                 }
-                counter = 0;
                 found = false;
             }
             return (newlineBraces == 0 && sameLineBraces != 0) || (newlineBraces != 0 && sameLineBraces == 0);
+        }
+
+        public static int CheckLinesLength(List<string> lines) {
+            return lines.Count(line => line.Length > MAX_LINE_LENGTH);
+        }
+
+        public static int CheckLoopsStatements(List<string> lines) {
+
+            string code = String.Join("\n", lines);
+
+            int magicNumberCount = 0;
+
+            string[] whileStatements = Regex.Matches(code, @"while\s*\(.*\)").
+                Cast<Match>().
+                Select(m => m.Value).
+                Select(s => {
+                    Match m = Regex.Match(s, @"\(.*\)");
+                    return m.Success ? m.Value : "";
+                }).
+                Where(s => !String.IsNullOrWhiteSpace(s)).
+                ToArray();
+
+            string[] forStatements = Regex.Matches(code, @"for\s*\(.*\)").
+                Cast<Match>().
+                Select(m => m.Value).
+                Select(s => {
+                    Match m = Regex.Match(s, @"\(.*\)");
+                    return m.Success ? m.Value : "";
+                }).
+                Where(s => !String.IsNullOrWhiteSpace(s)).
+                ToArray();
+
+            foreach (var forLoop in forStatements) {
+                Match infLoopMatch = Regex.Match(forLoop, @"\(\s*;\s*;\s*\)");
+                if (infLoopMatch.Success) continue;
+                string[] parts = forLoop.Split(';');
+                string conditionPart = parts[1];
+                MatchCollection integerMatches = Regex.Matches(conditionPart, @"\-?\d+");
+                if (integerMatches.Count != 0) {
+                    IEnumerable<Match> validMatches = integerMatches.
+                        Cast<Match>().
+                        Where(m => !(m.Value.Equals("0") || m.Value.Equals("-1")));
+                    if (validMatches.Count() != 0) {
+                        magicNumberCount++;
+                    }
+                }
+            }
+
+            foreach (var whileLoop in whileStatements) {
+                Match infLoopMatch = Regex.Match(whileLoop, @"\(\-?\d+\)");
+                if (infLoopMatch.Success) continue;
+            }
+
+            return magicNumberCount;
         }
 
         #endregion
@@ -265,7 +458,8 @@ namespace CodeStyle {
                 while (i != -1 && "*/".IsBetweenTwo(code, '"', i)) {
                     i = code.IndexOf("*/", i + 1);
                 }
-                string withRemovedPart = code.Remove(commentIndex, i - commentIndex + 1);
+                if (code[i - 1] == '/') goto end;
+                string withRemovedPart = code.Remove(commentIndex, i - commentIndex + 2);
                 code = withRemovedPart;
                 end:
                 commentIndex = code.IndexOf("/*", commentIndex + 1);
@@ -387,81 +581,96 @@ namespace CodeStyle {
 
         #region Loops and statements parsing
 
-        public static List<string> GetIfStatements(List<string> function) {
+        public static List<string> PreprocessCode(List<string> lines, List<Tree<string>> defineTree, LineProcessing processingOption = LineProcessing.All) {
+            if (Extensions.IsNullOrEmpty(lines)) throw new NullReferenceException();
+            if (Extensions.IsNullOrEmpty(defineTree)) throw new NullReferenceException();
+            var preprocessedCode = new List<string>(lines);
+            for (int i = 0; i < preprocessedCode.Count; ++i) {
+                foreach (var tree in defineTree) {
+                    string temp = preprocessedCode[i];
+                    ProcessCodeLine(ref temp, tree.root, tree.root, processingOption);
+                    preprocessedCode[i] = temp;
+                }
+            }
 
-            string functionCode = String.Join("\n", function);
+            return preprocessedCode;
+        }
 
-            MatchCollection bracedIfStatements = null, nonBracedIfStatements = null;
-            bracedIfStatements = Regex.Matches(functionCode, @"if\s*\r?\n*\(.*\)\s*\r?\n*\{");//@"if\s*\n*\(.*\)\s*(\r?\n)*\{((\r?\n)|.)*\}");
-            nonBracedIfStatements = Regex.Matches(functionCode, @"if\s*\(.*?\)\s*(\r?\n)*.*;");
+        public static void ProcessCodeLine(ref string line, TreeNode<string> node, TreeNode<string> root, LineProcessing processingOption = LineProcessing.All) {
+            if (node == null || String.IsNullOrEmpty(node.Value)) throw new NullReferenceException();
+            if (root == null || String.IsNullOrEmpty(root.Value)) throw new NullReferenceException();
+            if (processingOption == LineProcessing.BracesOnly) {
+                if (root.Value != "{" && root.Value != "}") return;
+            }
+            if (node.Value == root.Value) goto end;
+            if (line.Contains("*/") || line.Contains("#define")) return;
 
-            var ifCollection = new List<string>(nonBracedIfStatements.Cast<Match>().Select(m => m.Value));
+            //int index = 0;
+            //Regex r = new Regex(@"\W" + node.Value + @"\W?\b?");
+            //Regex r1 = new Regex(@"^?[a-zA-Z]" + node.Value + @"[a-zA-Z]");
+            //while ((index = line.IndexOf(node.Value, index)) != -1) {
+            //    if (node.Value.IsBetweenTwo(line, '"', index)) {
+            //        index++;
+            //        continue;
+            //    }
+            //    Match m;
+            //    try {
+            //        string substr = line.Substring(index - 1, node.Value.Length + 1);
+            //        m = r1.Match(substr);
+            //        if (m.Success) {
+            //            index += node.Value.Length;
+            //            continue;
+            //        }
+            //        m = r.Match(substr);
+            //        if (!m.Success) {
+            //            index += node.Value.Length;
+            //            continue;
+            //        }
+            //        m = null;
+            //    } catch (ArgumentOutOfRangeException) { }
+            //    line = line.Remove(index, node.Value.Length).Insert(index, root.Value);
+            //}
 
-            var sb = new StringBuilder();
-            int leftBraceCount = 0, rightBraceCount = 0;
+            string afterReplace = Regex.Replace(line, @"\b" + node.Value + @"\b", root.Value);
+            line = afterReplace;
 
-            foreach (Match m in bracedIfStatements) {
-                Console.WriteLine("match: ");
-                Console.WriteLine(m.Value);
-                Console.WriteLine(m.Index);
-                for (int i = m.Index; i < functionCode.Length; ++i) {
-                    char c = functionCode[i];
-                    sb.Append(c);
-                    string temp = c.ToString();
 
-                    if (c == '{') {
-                        if (temp.IsBetweenTwo(functionCode, '"', i)) continue;
-                        if (temp.IsCommentedOut(functionCode, i)) continue;
-                        leftBraceCount++;
-                    }
-                    
-                    if (c == '}') {
-                        if (temp.IsBetweenTwo(functionCode, '"', i)) continue;
-                        if (temp.IsCommentedOut(functionCode, i)) continue;
-                        rightBraceCount++;
-                    }
+            end:
+            foreach (var c in node.children) {
+                ProcessCodeLine(ref line, c, root, processingOption);
+            }
+        }
 
-                    if (leftBraceCount != 0 && rightBraceCount != 0 && rightBraceCount == leftBraceCount) {
-                        ifCollection.Add(sb.ToString());
-                        sb.Clear();
-                        leftBraceCount = rightBraceCount = 0;
+        public static string[] ProfanityOccurences(List<string> lines) {
+
+            StringBuilder sb = new StringBuilder(String.Join("\n", lines));
+
+            foreach (var c in lookupCharList) {
+                sb.Replace(c, ' ');
+            }
+
+            var words = sb.ToString().
+                Split(new string[] { "\n", " " }, StringSplitOptions.None).
+                Where(w => !String.IsNullOrWhiteSpace(w) && !w.IsNumeric()).
+                Select(w => w.Trim()).
+                Where(w => w.Length > 1).
+                Distinct().
+                Where(w => !keywords.Contains(w) && !builtInFunctionNames.Contains(w));
+
+            var occurences = new List<string>();
+
+            foreach (var profanity in forbiddenNames) {
+                foreach (var word in words) {
+                    int distance = LevenshteinDistance(profanity, word);
+                    if (distance <= (profanity.Length / 2)) {
+                        occurences.Add(word);
                     }
                 }
             }
-            return ifCollection;
+            
+            return occurences.ToArray();
         }
-
-        public static List<string> GetForLoops(List<string> function) {
-
-            string functionCode = String.Join("\n", function);
-
-            MatchCollection bracedForLoops = null, nonBracedForLoops = null;
-            bracedForLoops = Regex.Matches(functionCode, @"");
-            nonBracedForLoops = Regex.Matches(functionCode, @"for\s*\(.*?\)\s*(\r?\n)*.*;");
-
-
-            return null;
-        }
-
-        public static List<string> GetDoWhileLoops(List<string> function) {
-
-            string functionCode = String.Join("\n", function);
-
-
-            return null;
-        }
-
-        public static List<string> GetWhileLoops(List<string> function) {
-
-            string functionCode = String.Join("\n", function);
-
-            MatchCollection bracedWhileLoops = null, nonBracedWhileLoops = null;
-            bracedWhileLoops = Regex.Matches(functionCode, @"");
-            nonBracedWhileLoops = Regex.Matches(functionCode, @"while\s*\(.*?\)\s*(\r?\n)*.*;");
-
-            return null;
-        }
-
+ 
         #endregion
 
         #region Define handling
@@ -471,7 +680,7 @@ namespace CodeStyle {
             var defines = new List<string>();
             for (int i = 0; i < lines.Count; ++i) {
                 if (lines[i].Contains("#include")) continue; 
-                if (lines[i].Contains("#define")) { 
+                if (lines[i].Contains("#define") && lines[i].Split(' ').Length == 3) { 
                     try {
                         if (lines[i + 1].Contains("#define")) {
                             defines.Add(lines[i]);
@@ -535,7 +744,7 @@ namespace CodeStyle {
 
         #endregion
 
-        #region Initial parsing procedures
+        #region Parsing
 
         /// <summary>
         /// parses functions from input source file
@@ -589,11 +798,23 @@ namespace CodeStyle {
 
         #endregion
 
-        public static StyleStatistic AnalyzeCodeStyle(string filePath) {
-
-            List<string> codeLines = LoadCodeLines(filePath);
-
-
+        public static StyleStatistic AnalyzeCodeStyle(params string[] paths) {
+            if (paths.Length <= 0) return null;
+            var headers = paths.Where(path => {
+                string ext = Path.GetExtension(path).ToLower();
+                return ext == ".h" || ext == ".hpp";
+            });
+            var normalFiles = paths.Where(path => {
+                string ext = Path.GetExtension(path).ToLower();
+                return ext == ".c" || ext == ".cpp";
+            });
+            var fileContents = paths.Select(h => LoadCodeLines(h)).Select(p => GetNonMacroDefines(p));
+            var definesList = fileContents.Aggregate((acc, l) => acc.Concat(l).ToList());
+            var defineTree = BuildNonMacroDefineTree(definesList);
+            defineTree.ForEach(t => {
+                Console.WriteLine("nowe dżewo");
+                Tree<string>.Print(t.root);
+            });
             return null;
         }
 
